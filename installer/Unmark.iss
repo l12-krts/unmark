@@ -92,7 +92,9 @@ Type: filesandordirs; Name: "{userappdata}\Unmark"
 Type: filesandordirs; Name: "{localappdata}\Unmark"
 
 [Run]
-Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
+; Started through Explorer, not by Setup: a process Setup starts directly inherits its RedirectionGuard
+; mitigation, which blocks the symlinks in the Hugging Face model cache, so the models wouldn't load.
+Filename: "{win}\explorer.exe"; Parameters: """{app}\{#AppExeName}"""; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
 
 [Code]
 const

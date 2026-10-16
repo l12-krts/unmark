@@ -7,6 +7,7 @@ underscore names. Long work reports back through `unmark` CustomEvents on window
 from __future__ import annotations
 
 import base64
+import ctypes
 import io
 import json
 import os
@@ -103,12 +104,26 @@ def output_target(out_dir: Path, source: Path, used: set[str]) -> Path:
     return out_dir / name
 
 
+def redirection_guard_enforced() -> bool:
+    """Whether Windows' RedirectionGuard is on for this process. A parent can pass it on (Inno Setup's
+    finish page did); it blocks the user-made symlinks the Hugging Face model cache is built from."""
+    k32 = ctypes.WinDLL("kernel32")
+    k32.GetCurrentProcess.restype = ctypes.c_void_p
+    k32.GetProcessMitigationPolicy.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p, ctypes.c_size_t]
+    flags = ctypes.c_ulong()
+    ok = k32.GetProcessMitigationPolicy(k32.GetCurrentProcess(), 16, ctypes.byref(flags), ctypes.sizeof(flags))
+    return bool(ok and flags.value & 1)  # 16 = ProcessRedirectionTrustPolicy, bit 0 = enforce
+
+
 def friendly_error(exc: BaseException) -> str:
     text = str(exc) or exc.__class__.__name__
     if "out of memory" in text.lower():
         return f"Ran out of GPU memory. Try the Fast fill or {MODEL_NAMES['base']}."
     if isinstance(exc, PermissionError):
         return f"Unmark can't write to {exc.filename or 'that folder'}. Choose another output folder."
+    # The blocked symlink surfaces as EINVAL (Windows error 448 has no errno of its own).
+    if isinstance(exc, OSError) and exc.errno == 22 and redirection_guard_enforced():
+        return "Windows blocked the model cache for this window (it was started by another program). Close Unmark and open it from the Start menu."
     return text.splitlines()[0][:300]
 
 
