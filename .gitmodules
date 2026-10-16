@@ -1,0 +1,3 @@
+[submodule "vendor/rem-wm"]
+	path = vendor/rem-wm
+	url = https://github.com/Damarcreative/rem-wm.git

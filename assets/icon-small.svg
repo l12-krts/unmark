@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- Unmark (16-32 px): a photo whose © watermark is being wiped away along a diagonal, with a sparkle at the wipe. -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3E8BFF"/>
+      <stop offset="1" stop-color="#6B3FF2"/>
+    </linearGradient>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFD9A8"/>
+      <stop offset="1" stop-color="#FFF4E6"/>
+    </linearGradient>
+    <linearGradient id="far" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8E7CF8"/>
+      <stop offset="1" stop-color="#6D5AE8"/>
+    </linearGradient>
+    <linearGradient id="near" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4B3BC9"/>
+      <stop offset="1" stop-color="#33289A"/>
+    </linearGradient>
+    <clipPath id="photo"><rect x="40" y="56" width="176" height="144" rx="24"/></clipPath>
+    <!-- everything left of the wipe line still carries the watermark -->
+    <clipPath id="marked"><polygon points="0,0 158,0 98,256 0,256"/></clipPath>
+    <linearGradient id="wipe" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.55"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="8" y="8" width="240" height="240" rx="58" fill="url(#tile)"/>
+
+  <g clip-path="url(#photo)">
+    <rect x="40" y="56" width="176" height="144" fill="url(#sky)"/>
+    <circle cx="170" cy="98" r="17" fill="#FF8A3D"/>
+    <path d="M40 200 L40 168 L92 120 L130 156 L158 132 L216 182 L216 200 Z" fill="url(#far)"/>
+    <path d="M40 200 L40 186 L96 152 L140 176 L176 160 L216 192 L216 200 Z" fill="url(#near)"/>
+  </g>
+  <rect x="40" y="56" width="176" height="144" rx="24" fill="none" stroke="#FFFFFF" stroke-opacity="0.9" stroke-width="10"/>
+
+  <path d="M150 30 C154 54 162 62 186 66 C162 70 154 78 150 102 C146 78 138 70 114 66 C138 62 146 54 150 30 Z" fill="#FFFFFF"/>
+</svg>

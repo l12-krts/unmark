@@ -1,0 +1,16 @@
+# CUDA build of torch first (setup.ps1 does this):
+#   pip install torch==2.6.0 torchvision==0.21.0 --index-url https://download.pytorch.org/whl/cu124
+torch==2.6.0
+torchvision==0.21.0
+# Florence-2's remote code is happy on 4.49; newer releases changed generation internals.
+transformers==4.49.0
+huggingface_hub
+hf_xet
+timm
+einops
+opencv-python
+pillow
+numpy
+pydantic
+loguru
+pywebview>=6.2

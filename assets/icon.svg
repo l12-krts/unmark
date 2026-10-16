@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- Unmark: a photo whose © watermark is being wiped away along a diagonal, with a sparkle at the wipe. -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3E8BFF"/>
+      <stop offset="1" stop-color="#6B3FF2"/>
+    </linearGradient>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFD9A8"/>
+      <stop offset="1" stop-color="#FFF4E6"/>
+    </linearGradient>
+    <linearGradient id="far" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8E7CF8"/>
+      <stop offset="1" stop-color="#6D5AE8"/>
+    </linearGradient>
+    <linearGradient id="near" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4B3BC9"/>
+      <stop offset="1" stop-color="#33289A"/>
+    </linearGradient>
+    <clipPath id="photo"><rect x="40" y="56" width="176" height="144" rx="24"/></clipPath>
+    <!-- everything left of the wipe line still carries the watermark -->
+    <clipPath id="marked"><polygon points="0,0 158,0 98,256 0,256"/></clipPath>
+    <linearGradient id="wipe" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.55"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="8" y="8" width="240" height="240" rx="58" fill="url(#tile)"/>
+
+  <g clip-path="url(#photo)">
+    <rect x="40" y="56" width="176" height="144" fill="url(#sky)"/>
+    <circle cx="170" cy="98" r="17" fill="#FF8A3D"/>
+    <path d="M40 200 L40 168 L92 120 L130 156 L158 132 L216 182 L216 200 Z" fill="url(#far)"/>
+    <path d="M40 200 L40 186 L96 152 L140 176 L176 160 L216 192 L216 200 Z" fill="url(#near)"/>
+    <!-- the watermark, only on the not-yet-wiped side -->
+    <g clip-path="url(#marked)" fill="none" stroke="#FFFFFF" stroke-opacity="0.95" stroke-width="9" stroke-linecap="round">
+      <circle cx="110" cy="127" r="35"/>
+      <path d="M120.7 115.1 A16 16 0 1 0 120.7 138.9"/>
+    </g>
+    <!-- soft trail of the wipe -->
+    <polygon points="140,0 158,0 98,256 80,256" fill="url(#wipe)"/>
+  </g>
+  <rect x="40" y="56" width="176" height="144" rx="24" fill="none" stroke="#FFFFFF" stroke-opacity="0.9" stroke-width="6"/>
+
+  <!-- sparkle where the mark disappears -->
+  <path d="M146 44 C149 60 154 65 170 68 C154 71 149 76 146 92 C143 76 138 71 122 68 C138 65 143 60 146 44 Z" fill="#FFFFFF"/>
+  <path d="M190 196 C191.6 204 194 206.4 202 208 C194 209.6 191.6 212 190 220 C188.4 212 186 209.6 178 208 C186 206.4 188.4 204 190 196 Z" fill="#FFFFFF" fill-opacity="0.85"/>
+</svg>
