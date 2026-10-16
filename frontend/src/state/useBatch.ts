@@ -2,6 +2,7 @@ import { toast } from '@heroui/react'
 import { useMemo, useState } from 'react'
 
 import { errorText, parentDir, type ImageItem, type ItemState, type PyApi, type Settings, type UnmarkEvent } from '../lib/bridge'
+import type { Shape } from '../lib/regions'
 
 export interface BatchItem extends ImageItem {
   state: ItemState
@@ -23,6 +24,8 @@ export function useBatch(api: PyApi | null | undefined, settings: Settings) {
   const [cancelling, setCancelling] = useState(false)
   const [runIds, setRunIds] = useState<string[]>([])
   const [lastOutput, setLastOutput] = useState<string | null>(null)
+  /** Regions drawn once and applied at the same place on every image. */
+  const [shapes, setShapes] = useState<Shape[]>([])
 
   const outputDir = settings.outputDir ?? (items[0] ? `${parentDir(items[0].path)}\\unmarked` : null)
 
@@ -50,8 +53,11 @@ export function useBatch(api: PyApi | null | undefined, settings: Settings) {
   const pending = items.filter((i) => i.state !== 'done')
   const targets = pending.length ? pending : items
 
+  // With detection off there must be something drawn, or nothing would happen.
+  const canStart = settings.detector !== 'none' || shapes.length > 0
+
   const start = async () => {
-    if (!api || !outputDir || running || !targets.length) return
+    if (!api || !outputDir || running || !targets.length || !canStart) return
     const ids = new Set(targets.map((i) => i.id))
     setItems((current) =>
       current.map((i) =>
@@ -65,6 +71,7 @@ export function useBatch(api: PyApi | null | undefined, settings: Settings) {
         targets.map(({ id, path }) => ({ id, path })),
         settings,
         outputDir,
+        shapes,
       )
       if (!ok) setRunning(false)
     } catch (err) {
@@ -142,6 +149,9 @@ export function useBatch(api: PyApi | null | undefined, settings: Settings) {
     items,
     running,
     cancelling,
+    shapes,
+    setShapes,
+    canStart,
     outputDir,
     lastOutput,
     targets: targets.length,

@@ -269,13 +269,15 @@ class Api:
 
     # -- single ---------------------------------------------------------------------------------
 
-    def remove_single(self, path: str, settings: dict) -> dict:
+    def remove_single(self, path: str, settings: dict, shapes: list[dict] | None = None) -> dict:
         from .engine import load_image
 
         s = self._settings(settings)
         try:
             self._ensure_models(s)
-            result = self._engine.remove(path, s, lambda stage: self._emit("stage", job="single", stage=stage))
+            result = self._engine.remove(
+                path, s, lambda stage: self._emit("stage", job="single", stage=stage), shapes
+            )
         except Exception as exc:
             traceback.print_exc()
             raise RuntimeError(friendly_error(exc)) from exc
@@ -308,12 +310,15 @@ class Api:
 
     # -- batch ----------------------------------------------------------------------------------
 
-    def start_batch(self, items: list[dict], settings: dict, output_dir: str) -> bool:
+    def start_batch(
+        self, items: list[dict], settings: dict, output_dir: str, shapes: list[dict] | None = None
+    ) -> bool:
+        """shapes: regions drawn by hand, applied at the same place on every image."""
         if self._batch_thread and self._batch_thread.is_alive():
             return False
         self._batch_cancel.clear()
         self._batch_thread = threading.Thread(
-            target=self._run_batch, args=(items, self._settings(settings), Path(output_dir)), daemon=True
+            target=self._run_batch, args=(items, self._settings(settings), Path(output_dir), shapes), daemon=True
         )
         self._batch_thread.start()
         return True
@@ -330,7 +335,7 @@ class Api:
             "mask": self._masks.get(item_id),
         }
 
-    def _run_batch(self, items: list[dict], settings, out_dir: Path) -> None:
+    def _run_batch(self, items: list[dict], settings, out_dir: Path, shapes: list[dict] | None) -> None:
         from .engine import save_image
 
         self._emit("batch", state="running", total=len(items))
@@ -349,7 +354,7 @@ class Api:
             self._emit("batch-item", id=item_id, state="running")
             try:
                 result = self._engine.remove(
-                    source, settings, lambda stage: self._emit("stage", job="batch", id=item_id, stage=stage)
+                    source, settings, lambda stage: self._emit("stage", job="batch", id=item_id, stage=stage), shapes
                 )
                 saved = save_image(result.image, output_target(out_dir, source, used))
                 if result.regions:

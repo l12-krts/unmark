@@ -27,6 +27,11 @@ run.bat
   painted out, *Save…*.
 - **Batch**: add images or a folder (or drop them), pick the output folder (default: an `unmarked` folder next to the
   images), *Remove from N images*. Originals are never touched. Click the eye on a row to compare.
+- **Drawn regions**: mark what detection misses with **Box** (drag) or **Brush** (paint, with a size slider). Click a
+  box to select it; Delete removes it, Ctrl+Z undoes. Drawn regions are removed together with whatever detection
+  finds; set Detection to **Manual** to remove only what you draw. In Single, *Edit regions* goes back from a result;
+  in Batch, *Draw…* sets regions once for every image (stored as relative positions, so they suit sets with the mark
+  in a fixed place; flip through the images in that window to check).
 - Dropping several images on the Single tab moves them to Batch. Ctrl+O opens, Ctrl+S saves.
 
 ## Settings
@@ -34,7 +39,7 @@ run.bat
 | Setting | What it does |
 | --- | --- |
 | Look for | The text prompt Florence-2 searches for: `watermark`, `logo`, `text`, `signature`… |
-| Detection | **Boxes** (default): Florence-2 open-vocabulary detection, filled rectangles. Fast (~0.3 s) and covers the whole mark. **Outline**: rem-wm's original `<REGION_TO_SEGMENTATION>` polygons. Tighter, but several seconds per image and it can spill into the picture. |
+| Detection | **Boxes** (default): Florence-2 open-vocabulary detection, filled rectangles. Fast (~0.3 s) and covers the whole mark. **Outline**: rem-wm's original `<REGION_TO_SEGMENTATION>` polygons. Tighter, but several seconds per image and it can spill into the picture. **Manual**: no detection, only drawn regions. |
 | Grow mask | Dilates the mask so soft edges and drop shadows go too. |
 | Fill | **Detail** (default): LaMa at full resolution around each mark. **Fast (rem-wm)**: rem-wm's own config, inpaints at 200 px and scales back up (soft on big images). **Whole image**: full frame at full resolution. |
 | Detector model | Florence-2 Large (rem-wm's default) or Base (lighter, quicker). |

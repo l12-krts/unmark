@@ -207,7 +207,14 @@ export default function App() {
       <div className="flex min-h-0 flex-1 gap-4 p-4">
         <main className="shell-enter flex min-w-0 flex-1 flex-col" style={{ ['--d' as string]: 1 }}>
           <Tabs.Panel id="single" className="flex min-h-0 flex-1 flex-col p-0">
-            <SingleView single={single} engine={engine} dragging={dragging} adding={adding} batchRunning={batch.running} />
+            <SingleView
+              single={single}
+              engine={engine}
+              dragging={dragging}
+              adding={adding}
+              batchRunning={batch.running}
+              detector={settings.detector}
+            />
           </Tabs.Panel>
           <Tabs.Panel id="batch" className="flex min-h-0 flex-1 flex-col p-0">
             <BatchView
