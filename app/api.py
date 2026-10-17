@@ -12,6 +12,7 @@ import io
 import json
 import os
 import subprocess
+import sys
 import threading
 import time
 import traceback
@@ -25,7 +26,7 @@ from PIL import Image, ImageOps
 
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"}
 FILE_TYPES = ("Images (*.png;*.jpg;*.jpeg;*.webp;*.bmp;*.tif;*.tiff)",)
-CONFIG_DIR = Path(os.environ.get("APPDATA") or Path.home()) / "Unmark"
+CONFIG_DIR = Path(os.environ.get("APPDATA") or os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "Unmark"
 SETTINGS_FILE = CONFIG_DIR / "settings.json"
 PREVIEW_SIDE = 2048
 THUMB_SIDE = 256
@@ -107,6 +108,8 @@ def output_target(out_dir: Path, source: Path, used: set[str]) -> Path:
 def redirection_guard_enforced() -> bool:
     """Whether Windows' RedirectionGuard is on for this process. A parent can pass it on (Inno Setup's
     finish page did); it blocks the user-made symlinks the Hugging Face model cache is built from."""
+    if sys.platform != "win32":
+        return False
     k32 = ctypes.WinDLL("kernel32")
     k32.GetCurrentProcess.restype = ctypes.c_void_p
     k32.GetProcessMitigationPolicy.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p, ctypes.c_size_t]
@@ -262,10 +265,16 @@ class Api:
         return data_url(load_image(path), PREVIEW_SIDE)
 
     def open_path(self, path: str) -> None:
-        os.startfile(path)  # noqa: S606 - local file the user picked
+        if sys.platform == "win32":
+            os.startfile(path)  # noqa: S606 - local file the user picked
+        else:
+            subprocess.Popen(["xdg-open", path])
 
     def reveal(self, path: str) -> None:
-        subprocess.Popen(["explorer", "/select,", os.path.normpath(path)])
+        if sys.platform == "win32":
+            subprocess.Popen(["explorer", "/select,", os.path.normpath(path)])
+        else:  # no portable "select this file": open its folder
+            subprocess.Popen(["xdg-open", str(Path(path).parent)])
 
     # -- single ---------------------------------------------------------------------------------
 

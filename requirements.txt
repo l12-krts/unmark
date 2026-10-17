@@ -14,3 +14,5 @@ numpy
 pydantic
 loguru
 pywebview>=6.2
+# Linux: pywebview's Qt backend (Windows uses the built-in WebView2).
+pywebview[qt]>=6.2; sys_platform == "linux"

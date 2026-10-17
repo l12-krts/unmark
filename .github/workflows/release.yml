@@ -1,0 +1,168 @@
+# Builds Unmark for Windows (Inno Setup installer) and Linux (.tar.xz) and publishes them as a new release.
+#
+# Runs when a version tag is pushed (git tag v1.2.0 && git push origin v1.2.0; it must match
+# app/__init__.py's __version__), or by hand from the Actions tab, which tags v<__version__> on the
+# chosen branch. The release stays a draft until both builds are uploaded.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  GH_REPO: ${{ github.repository }}
+
+jobs:
+  draft:
+    name: Draft release
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version
+        id: version
+        run: |
+          version=$(python3 -c 'exec(open("app/__init__.py").read()); print(__version__)')
+          tag="v$version"
+          if [ "$GITHUB_REF_TYPE" = tag ] && [ "$GITHUB_REF_NAME" != "$tag" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match app/__init__.py (__version__ = \"$version\")."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Create draft release
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          # A draft left by an earlier failed run is reused; a published release is never replaced.
+          if draft=$(gh release view "$TAG" --json isDraft --jq .isDraft 2>/dev/null); then
+            if [ "$draft" = true ]; then
+              echo "Reusing the draft release $TAG."
+              exit 0
+            fi
+            echo "::error::Release $TAG is already published. Bump __version__ in app/__init__.py."
+            exit 1
+          fi
+          cat > notes.md <<EOF
+          ## Download
+
+          - **Windows 10/11 (x64)**: \`Unmark-$VERSION-setup.exe\`. Needs the Microsoft Edge WebView2 Runtime (built into Windows 11).
+          - **Linux (x64, glibc 2.35+)**: \`Unmark-$VERSION-linux-x64.tar.xz\`. If it comes in parts (\`.part00\`, \`.part01\`, ...), download them all and join them first:
+            \`cat Unmark-$VERSION-linux-x64.tar.xz.part* > Unmark-$VERSION-linux-x64.tar.xz\`.
+            Then \`tar -xJf Unmark-$VERSION-linux-x64.tar.xz\` and run \`Unmark/Unmark\`. If the window doesn't open, install Qt's X11 libraries:
+            \`sudo apt install libxcb-cursor0 libxkbcommon-x11-0 libxcb-icccm4 libxcb-keysyms1\`.
+
+          Both carry the CUDA build of torch: an NVIDIA GPU makes it fast, otherwise it runs (slowly) on the CPU.
+          The first launch downloads the models (about 1.7 GB). Each file has a \`.sha256\` next to it.
+          EOF
+          gh release create "$TAG" --draft --target "$GITHUB_SHA" --title "Unmark $VERSION" \
+            --notes-file notes.md --generate-notes
+
+  build:
+    name: Build (${{ matrix.name }})
+    needs: draft
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            os: windows-latest
+            python: .venv/Scripts/python.exe
+            asset: setup.exe
+          - name: Linux
+            # The oldest supported image, so the bundle runs on older glibc too.
+            os: ubuntu-22.04
+            python: .venv/bin/python
+            asset: linux-x64.tar.xz
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 150
+    defaults:
+      run:
+        shell: bash
+    env:
+      ASSET: dist/Unmark-${{ needs.draft.outputs.version }}-${{ matrix.asset }}
+      TAG: ${{ needs.draft.outputs.tag }}
+    steps:
+      - name: Free disk space
+        if: runner.os == 'Linux'
+        # CUDA torch, the frozen app and its archive need ~20 GB.
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          df -h /
+
+      - name: Install Qt build libraries
+        if: runner.os == 'Linux'
+        # PyInstaller's PyQt6 hooks load QtGui to find what QtWebEngine needs.
+        run: sudo apt-get install -y --no-install-recommends libegl1 libxkbcommon0
+
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Inno Setup
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco upgrade innosetup -y --no-progress
+          $iscc = Get-ChildItem "$env:ProgramFiles\Inno Setup*\ISCC.exe", "${env:ProgramFiles(x86)}\Inno Setup*\ISCC.exe" -ErrorAction SilentlyContinue |
+            Sort-Object { $_.VersionInfo.FileVersionRaw } -Descending | Select-Object -First 1
+          if (-not $iscc) { throw "ISCC.exe not found after installing Inno Setup." }
+          Write-Host "Inno Setup $($iscc.VersionInfo.FileVersion): $($iscc.FullName)"
+          "ISCC=$($iscc.FullName)" >> $env:GITHUB_ENV
+
+      - name: Create the venv
+        # As setup.ps1 does: the CUDA 12.4 build of torch, then the rest.
+        run: |
+          python -m venv .venv
+          ${{ matrix.python }} -m pip install --upgrade pip
+          ${{ matrix.python }} -m pip install --no-cache-dir torch==2.6.0 torchvision==0.21.0 --index-url https://download.pytorch.org/whl/cu124
+          ${{ matrix.python }} -m pip install --no-cache-dir -r requirements.txt
+
+      - name: Build and smoke-test
+        # The smoke test runs on the CPU here and downloads the models first.
+        run: ${{ matrix.python }} build.py
+
+      - name: Upload to the release
+        # GitHub caps release files at 2 GiB: anything bigger goes up in parts (joined with cat).
+        run: |
+          test -f "$ASSET" || { echo "::error::$ASSET was not built."; exit 1; }
+          (cd dist && sha256sum "$(basename "$ASSET")" > "$(basename "$ASSET").sha256")
+          files=("$ASSET.sha256")
+          if [ "$(stat -c %s "$ASSET")" -ge $((2000 * 1024 * 1024)) ]; then
+            split -b 1900M -d -a 2 "$ASSET" "$ASSET.part"
+            files+=("$ASSET".part*)
+          else
+            files+=("$ASSET")
+          fi
+          ls -l "${files[@]}"
+          gh release upload "$TAG" "${files[@]}" --clobber
+
+  publish:
+    name: Publish release
+    needs: [draft, build]
+    runs-on: ubuntu-latest
+    steps:
+      - run: gh release edit "${{ needs.draft.outputs.tag }}" --draft=false
