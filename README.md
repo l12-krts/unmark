@@ -73,3 +73,18 @@ Builds the UI, packs `assets/icons/*.png` into `assets/unmark.ico`, freezes the 
 compiles `installer\Unmark.iss` with Inno Setup 6.5+ into `dist\Unmark-<version>-setup.exe`. The installer holds
 the CUDA build of torch (a few GB); models still download on first launch. `--icons` re-renders the icon PNGs
 from the SVGs first (`npm --prefix frontend run icons`), `--no-installer` stops after the app folder.
+
+On Linux, `.venv/bin/python build.py` builds `dist/Unmark/Unmark` (the window is pywebview's Qt backend, from
+`requirements.txt`) and packs it into `dist/Unmark-<version>-linux-x64.tar.xz` instead of an installer.
+
+## Release
+
+`.github/workflows/release.yml` builds both on GitHub Actions, smoke-tests them, and publishes a new release with the
+installer and the Linux archive. Bump `__version__` in `app/__init__.py`, then push the matching tag:
+
+```bash
+git tag v1.1.0 && git push origin v1.1.0
+```
+
+or run *Release* from the Actions tab, which tags `v<__version__>` itself. Files over GitHub's 2 GiB limit go up in
+parts (`.part00`, `.part01`…; the release notes say how to join them).

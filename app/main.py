@@ -14,21 +14,27 @@ import sys
 import tempfile
 import time
 import traceback
-import winreg
 from pathlib import Path
 
 from . import __version__
+
+WINDOWS = sys.platform == "win32"
+if WINDOWS:
+    import winreg
 
 FROZEN = getattr(sys, "frozen", False)
 # Frozen (PyInstaller): data files sit in _internal next to Unmark.exe.
 BASE = Path(getattr(sys, "_MEIPASS", "")) if FROZEN else Path(__file__).resolve().parent.parent
 DIST = BASE / "frontend" / "dist" / "index.html"
-ICON = BASE / "assets" / "unmark.ico"
+# Linux (Qt) takes a PNG for the window icon; Windows reads the .ico baked into Unmark.exe.
+ICON = BASE / "assets" / ("unmark.ico" if WINDOWS else "icons/icon-256.png")
 DEV_URL = "http://localhost:5173"
 LOG_DIR = Path(os.environ.get("LOCALAPPDATA") or tempfile.gettempdir()) / "Unmark"
 
 
 def system_is_dark() -> bool:
+    if not WINDOWS:
+        return False
     try:
         with winreg.OpenKey(
             winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
@@ -61,7 +67,10 @@ def smoke_test(report: Path) -> int:
         draw = ImageDraw.Draw(image)
         for y in range(420):
             draw.line([(0, y), (640, y)], fill=(60 + y // 4, 90 + y // 6, 160))
-        font = ImageFont.truetype("C:/Windows/Fonts/arialbd.ttf", 56)
+        try:
+            font = ImageFont.truetype("C:/Windows/Fonts/arialbd.ttf" if WINDOWS else "DejaVuSans-Bold.ttf", 56)
+        except OSError:
+            font = ImageFont.load_default(56)
         draw.text((150, 180), "SAMPLE", font=font, fill=(255, 255, 255))
         source = Path(tempfile.gettempdir()) / "unmark-smoke.png"
         image.save(source)
@@ -93,7 +102,8 @@ def main() -> None:
         sys.exit("The UI isn't built yet. Run: npm --prefix frontend run build")
 
     # Own taskbar identity, so Windows shows Unmark's icon rather than Python's when run from source.
-    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("lab.krts.Unmark")
+    if WINDOWS:
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("lab.krts.Unmark")
 
     import webview
     from webview.dom import DOMEventHandler
@@ -118,7 +128,8 @@ def main() -> None:
         window.dom.document.events.drop += DOMEventHandler(api._on_drop, prevent_default=True)
 
     window.events.loaded += bind_drop
-    webview.start(api._startup, debug=dev, http_server=not dev, icon=str(ICON) if ICON.exists() else None)
+    webview.start(api._startup, debug=dev, http_server=not dev, icon=str(ICON) if ICON.exists() else None,
+                  gui=None if WINDOWS else "qt")
 
 
 if __name__ == "__main__":

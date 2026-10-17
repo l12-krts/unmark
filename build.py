@@ -7,6 +7,9 @@
     .venv\\Scripts\\python build.py --no-installer  skip the Inno Setup installer
     .venv\\Scripts\\python build.py --skip-test     don't run the frozen app's smoke test
 
+On Linux (.venv/bin/python build.py) the app is dist/Unmark/Unmark and, in place of the installer,
+dist/Unmark-<version>-linux-x64.tar.xz.
+
 The installer carries the whole CUDA build of torch (~3 GB on disk). The models (~1.7 GB) are not
 bundled: Unmark downloads them on first launch, as it does when run from source.
 """
@@ -29,15 +32,16 @@ DIST = ROOT / "dist"
 FRONTEND = ROOT / "frontend"
 ASSETS = ROOT / "assets"
 APP = "Unmark"
+WINDOWS = sys.platform == "win32"
 PUBLISHER = "lab.krts"
 ICON_SIZES = [16, 20, 24, 32, 40, 48, 64, 96, 128, 256]
 INNO_SETUP_URL = "https://jrsoftware.org/isdl.php"
 
 
 def ensure_venv() -> None:
-    py = VENV / "Scripts" / "python.exe"
+    py = VENV / "Scripts" / "python.exe" if WINDOWS else VENV / "bin" / "python"
     if not py.exists():
-        raise SystemExit("No .venv: run setup.ps1 first.")
+        raise SystemExit("No .venv: run setup.ps1 first." if WINDOWS else "No .venv: create it and install requirements.txt first.")
     if Path(sys.prefix).resolve() != VENV.resolve():
         sys.exit(subprocess.call([str(py), str(Path(__file__).resolve()), *sys.argv[1:]]))
     subprocess.check_call([str(py), "-m", "pip", "install", "-q", "--disable-pip-version-check", "pyinstaller>=6.10"])
@@ -169,10 +173,20 @@ def build_installer(ver: str, source: Path) -> Path | None:
     return setup if setup.exists() else None
 
 
+def build_archive(ver: str, source: Path) -> Path:
+    """Linux: the app folder as a .tar.xz (multithreaded xz; ~4 GB of CUDA libraries go in)."""
+    archive = DIST / f"{APP}-{ver}-linux-x64.tar.xz"
+    print(f"Packing {archive.name} (a few minutes) ...")
+    subprocess.run(["tar", "-cJf", str(archive), "-C", str(source.parent), source.name], check=True,
+                   env={**os.environ, "XZ_OPT": "-T0"})
+    return archive
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--icons", action="store_true", help="re-render the icon PNGs from assets/icon.svg")
-    parser.add_argument("--no-installer", action="store_true", help="don't build the Inno Setup installer")
+    parser.add_argument("--no-installer", action="store_true",
+                        help="don't build the Inno Setup installer (on Linux: the .tar.xz)")
     parser.add_argument("--skip-test", action="store_true", help="don't run the frozen app's smoke test")
     args = parser.parse_args()
     ensure_venv()
@@ -196,9 +210,9 @@ def main() -> int:
     PyInstaller.__main__.run([str(ROOT / f"{APP}.spec"), "--noconfirm", "--clean",
                               "--distpath", str(DIST), "--workpath", str(BUILD / "pyinstaller")])
     app_dir = DIST / APP
-    exe = app_dir / f"{APP}.exe"
+    exe = app_dir / (f"{APP}.exe" if WINDOWS else APP)
     if not exe.exists():
-        print("Build failed: no Unmark.exe produced.")
+        print(f"Build failed: no {exe.name} produced.")
         return 1
     size = sum(f.stat().st_size for f in app_dir.rglob("*") if f.is_file())
     print(f"Done: {app_dir} ({size / 1024 ** 3:.2f} GB)")
@@ -208,7 +222,7 @@ def main() -> int:
 
     # 3. The installer.
     if not args.no_installer:
-        setup = build_installer(ver, app_dir)
+        setup = build_installer(ver, app_dir) if WINDOWS else build_archive(ver, app_dir)
         if setup:
             print(f"Done: {setup} ({setup.stat().st_size / 1024 ** 3:.2f} GB)")
     return 0
