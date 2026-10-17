@@ -7,6 +7,7 @@ underscore names. Long work reports back through `unmark` CustomEvents on window
 from __future__ import annotations
 
 import base64
+import ctypes
 import io
 import json
 import os
@@ -103,12 +104,26 @@ def output_target(out_dir: Path, source: Path, used: set[str]) -> Path:
     return out_dir / name
 
 
+def redirection_guard_enforced() -> bool:
+    """Whether Windows' RedirectionGuard is on for this process. A parent can pass it on (Inno Setup's
+    finish page did); it blocks the user-made symlinks the Hugging Face model cache is built from."""
+    k32 = ctypes.WinDLL("kernel32")
+    k32.GetCurrentProcess.restype = ctypes.c_void_p
+    k32.GetProcessMitigationPolicy.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p, ctypes.c_size_t]
+    flags = ctypes.c_ulong()
+    ok = k32.GetProcessMitigationPolicy(k32.GetCurrentProcess(), 16, ctypes.byref(flags), ctypes.sizeof(flags))
+    return bool(ok and flags.value & 1)  # 16 = ProcessRedirectionTrustPolicy, bit 0 = enforce
+
+
 def friendly_error(exc: BaseException) -> str:
     text = str(exc) or exc.__class__.__name__
     if "out of memory" in text.lower():
         return f"Ran out of GPU memory. Try the Fast fill or {MODEL_NAMES['base']}."
     if isinstance(exc, PermissionError):
         return f"Unmark can't write to {exc.filename or 'that folder'}. Choose another output folder."
+    # The blocked symlink surfaces as EINVAL (Windows error 448 has no errno of its own).
+    if isinstance(exc, OSError) and exc.errno == 22 and redirection_guard_enforced():
+        return "Windows blocked the model cache for this window (it was started by another program). Close Unmark and open it from the Start menu."
     return text.splitlines()[0][:300]
 
 
@@ -254,13 +269,15 @@ class Api:
 
     # -- single ---------------------------------------------------------------------------------
 
-    def remove_single(self, path: str, settings: dict) -> dict:
+    def remove_single(self, path: str, settings: dict, shapes: list[dict] | None = None) -> dict:
         from .engine import load_image
 
         s = self._settings(settings)
         try:
             self._ensure_models(s)
-            result = self._engine.remove(path, s, lambda stage: self._emit("stage", job="single", stage=stage))
+            result = self._engine.remove(
+                path, s, lambda stage: self._emit("stage", job="single", stage=stage), shapes
+            )
         except Exception as exc:
             traceback.print_exc()
             raise RuntimeError(friendly_error(exc)) from exc
@@ -293,12 +310,15 @@ class Api:
 
     # -- batch ----------------------------------------------------------------------------------
 
-    def start_batch(self, items: list[dict], settings: dict, output_dir: str) -> bool:
+    def start_batch(
+        self, items: list[dict], settings: dict, output_dir: str, shapes: list[dict] | None = None
+    ) -> bool:
+        """shapes: regions drawn by hand, applied at the same place on every image."""
         if self._batch_thread and self._batch_thread.is_alive():
             return False
         self._batch_cancel.clear()
         self._batch_thread = threading.Thread(
-            target=self._run_batch, args=(items, self._settings(settings), Path(output_dir)), daemon=True
+            target=self._run_batch, args=(items, self._settings(settings), Path(output_dir), shapes), daemon=True
         )
         self._batch_thread.start()
         return True
@@ -315,7 +335,7 @@ class Api:
             "mask": self._masks.get(item_id),
         }
 
-    def _run_batch(self, items: list[dict], settings, out_dir: Path) -> None:
+    def _run_batch(self, items: list[dict], settings, out_dir: Path, shapes: list[dict] | None) -> None:
         from .engine import save_image
 
         self._emit("batch", state="running", total=len(items))
@@ -334,7 +354,7 @@ class Api:
             self._emit("batch-item", id=item_id, state="running")
             try:
                 result = self._engine.remove(
-                    source, settings, lambda stage: self._emit("stage", job="batch", id=item_id, stage=stage)
+                    source, settings, lambda stage: self._emit("stage", job="batch", id=item_id, stage=stage), shapes
                 )
                 saved = save_image(result.image, output_target(out_dir, source, used))
                 if result.regions:

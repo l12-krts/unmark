@@ -1,11 +1,14 @@
 import { Alert, Button, Card, Chip, Label, Spinner, Surface, Switch } from '@heroui/react'
-import { ArrowRotateRight, FloppyDisk, MagicWand, Picture, Xmark } from '@gravity-ui/icons'
+import { ArrowRotateRight, FloppyDisk, MagicWand, Pencil, Picture, Xmark } from '@gravity-ui/icons'
 import { useEffect, useState } from 'react'
 
 import { CompareSlider } from '../components/CompareSlider'
 import { DropOverlay, DropZone } from '../components/DropZone'
-import { formatBytes, type EngineStatus } from '../lib/bridge'
+import { RegionEditor } from '../components/RegionEditor'
+import { RegionToolbar } from '../components/RegionToolbar'
+import { formatBytes, type Detector, type EngineStatus } from '../lib/bridge'
 import { useAfterMount } from '../lib/motion'
+import { brushRadius, type Tool } from '../lib/regions'
 import type { SingleController } from '../state/useSingle'
 
 // Each result sweeps open once, not again when the tab is revisited.
@@ -17,10 +20,13 @@ interface Props {
   dragging: boolean
   adding: boolean
   batchRunning: boolean
+  detector: Detector
 }
 
-export function SingleView({ single, engine, dragging, adding, batchRunning }: Props) {
+export function SingleView({ single, engine, dragging, adding, batchRunning, detector }: Props) {
   const [showMask, setShowMask] = useState(false)
+  const [tool, setTool] = useState<Tool>('box')
+  const [brushStep, setBrushStep] = useState(4)
   const swapped = useAfterMount() // content changed after the tab opened: animate it in
   const { item, preview, status, result } = single
   const working = status === 'working'
@@ -49,6 +55,8 @@ export function SingleView({ single, engine, dragging, adding, batchRunning }: P
 
   const engineBusy = engine && ['starting', 'loading', 'downloading'].includes(engine.state)
   const stageText = engineBusy ? engine.message : single.stage
+  // Detection off and nothing drawn: there'd be nothing to remove.
+  const nothingToDo = detector === 'none' && single.shapes.length === 0
 
   return (
     <Card className={`relative flex min-h-0 flex-1 flex-col ${swapped ? 'view-enter' : ''}`}>
@@ -63,6 +71,21 @@ export function SingleView({ single, engine, dragging, adding, batchRunning }: P
           <Xmark />
         </Button>
       </Card.Header>
+
+      {!result && (
+        <div className={`px-4 ${swapped ? 'fade-in-fast' : ''}`}>
+          <RegionToolbar
+            tool={tool}
+            onTool={setTool}
+            brushStep={brushStep}
+            onBrushStep={setBrushStep}
+            count={single.shapes.length}
+            onUndo={() => single.setShapes(single.shapes.slice(0, -1))}
+            onClear={() => single.setShapes([])}
+            isDisabled={working}
+          />
+        </div>
+      )}
 
       <Card.Content className="stage min-h-0 flex-1">
         {result ? (
@@ -81,6 +104,15 @@ export function SingleView({ single, engine, dragging, adding, batchRunning }: P
           <div className="stage__fit" data-busy={working} style={{ ['--ar' as string]: item.width / item.height }}>
             <img className="stage__img stage__img--placeholder rounded-lg" src={item.thumb} alt="" draggable={false} />
             {preview && <img className="stage__img fade-in rounded-lg" src={preview} alt={item.name} draggable={false} />}
+            <RegionEditor
+              shapes={single.shapes}
+              onChange={single.setShapes}
+              tool={tool}
+              brush={brushRadius(brushStep)}
+              width={item.width}
+              height={item.height}
+              editable={!working}
+            />
             {working && (
               <div className="absolute inset-0 grid place-items-center">
                 <Surface className="pop-enter flex items-center gap-3 rounded-2xl px-4 py-3 shadow-lg">
@@ -137,6 +169,10 @@ export function SingleView({ single, engine, dragging, adding, batchRunning }: P
               </Switch>
             )}
             <div className="ml-auto flex gap-2">
+              <Button variant="ghost" onPress={single.editRegions}>
+                <Pencil />
+                Edit regions
+              </Button>
               <Button variant="secondary" onPress={() => void single.run()} isDisabled={batchRunning}>
                 <ArrowRotateRight />
                 Run again
@@ -150,13 +186,17 @@ export function SingleView({ single, engine, dragging, adding, batchRunning }: P
         ) : (
           <div key="ready" className={`flex flex-1 flex-wrap items-center gap-3 ${swapped ? 'fade-in-fast' : ''}`}>
             <span className="text-sm text-muted">
-              {batchRunning ? 'A batch is running. This waits until it’s done.' : 'Uses the settings on the right.'}
+              {batchRunning
+                ? 'A batch is running. This waits until it’s done.'
+                : nothingToDo
+                  ? 'Detection is set to Manual: draw a region first.'
+                  : 'Uses the settings on the right.'}
             </span>
             <div className="ml-auto flex gap-2">
               <Button variant="secondary" onPress={() => void single.pick()} isDisabled={working}>
                 Replace
               </Button>
-              <Button onPress={() => void single.run()} isDisabled={working || batchRunning}>
+              <Button onPress={() => void single.run()} isDisabled={working || batchRunning || nothingToDo}>
                 <MagicWand />
                 Remove watermark
               </Button>

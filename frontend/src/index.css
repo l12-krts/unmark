@@ -216,6 +216,65 @@ body {
   transition: opacity 150ms ease;
 }
 
+/* --- drawn regions ---------------------------------------------------------------------------- */
+
+.regions {
+  touch-action: none;
+}
+
+.regions[data-editable="false"] {
+  pointer-events: none;
+}
+
+.regions[data-editable="true"][data-tool="box"] {
+  cursor: crosshair;
+}
+
+.regions[data-editable="true"][data-tool="brush"] {
+  cursor: none; /* the brush outline is the cursor */
+}
+
+.stage__fit[data-busy="true"] .regions {
+  opacity: 0.45;
+}
+
+.regions__box {
+  fill: color-mix(in oklab, var(--accent) 22%, transparent);
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.regions__box[data-selected="true"] {
+  fill: color-mix(in oklab, var(--accent) 34%, transparent);
+  stroke-width: 3;
+}
+
+.regions__draft {
+  fill: color-mix(in oklab, var(--accent) 14%, transparent);
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+}
+
+.regions__strokes {
+  opacity: 0.5;
+}
+
+.regions__strokes path {
+  fill: none;
+  stroke: var(--accent);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.regions__cursor {
+  fill: none;
+  stroke: white;
+  stroke-width: 1.5;
+  mix-blend-mode: difference;
+  pointer-events: none;
+}
+
 /* --- drop target ------------------------------------------------------------------------------ */
 
 .dropzone {

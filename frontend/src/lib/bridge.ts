@@ -3,6 +3,8 @@
 
 import { useEffect, useRef } from 'react'
 
+import type { Shape } from './regions'
+
 export interface ImageItem {
   id: string
   path: string
@@ -13,7 +15,7 @@ export interface ImageItem {
   thumb: string
 }
 
-export type Detector = 'box' | 'segment'
+export type Detector = 'box' | 'segment' | 'none'
 export type ModelSize = 'large' | 'base'
 export type Strategy = 'crop' | 'fast' | 'original'
 
@@ -86,9 +88,9 @@ export interface PyApi {
   preview(path: string): Promise<string>
   open_path(path: string): Promise<void>
   reveal(path: string): Promise<void>
-  remove_single(path: string, settings: Settings): Promise<SingleResult>
+  remove_single(path: string, settings: Settings, shapes: Shape[]): Promise<SingleResult>
   save_single(resultId: string, sourcePath: string): Promise<string | null>
-  start_batch(items: { id: string; path: string }[], settings: Settings, outputDir: string): Promise<boolean>
+  start_batch(items: { id: string; path: string }[], settings: Settings, outputDir: string, shapes: Shape[]): Promise<boolean>
   cancel_batch(): Promise<void>
   batch_compare(itemId: string, source: string, output: string): Promise<CompareImages>
 }

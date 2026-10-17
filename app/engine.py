@@ -67,10 +67,42 @@ def plausible(box, width: int, height: int) -> bool:
     return touching < 2
 
 
+def grow(mask: np.ndarray, px: int) -> np.ndarray:
+    """Dilate a 0/255 mask by px, so soft edges and shadows go too."""
+    if not px or not mask.any():
+        return mask
+    k = px * 2 + 1
+    return cv2.dilate(mask, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k)))
+
+
+def regions_mask(size: tuple[int, int], shapes: list[dict] | None) -> tuple[np.ndarray, int]:
+    """Mask of regions drawn by hand, and how many. Shapes use fractions of the image, so the same
+    regions fit any image size: {"kind": "box", x, y, w, h} or {"kind": "stroke", r, points: [[x, y], ...]}
+    where r is the brush radius as a fraction of the image's shorter side."""
+    width, height = size
+    mask = Image.new("L", size, 0)
+    draw = ImageDraw.Draw(mask)
+    count = 0
+    for shape in shapes or []:
+        if shape.get("kind") == "box":
+            x, y, w, h = (float(shape[k]) for k in ("x", "y", "w", "h"))
+            draw.rectangle((x * width, y * height, (x + w) * width, (y + h) * height), fill=255)
+            count += 1
+        elif shape.get("kind") == "stroke" and shape.get("points"):
+            r = max(1.0, float(shape["r"]) * min(width, height))
+            points = [(px * width, py * height) for px, py in shape["points"]]
+            if len(points) > 1:
+                draw.line(points, fill=255, width=round(2 * r), joint="curve")
+            for px, py in points:  # round caps and joints
+                draw.ellipse((px - r, py - r, px + r, py + r), fill=255)
+            count += 1
+    return np.array(mask), count
+
+
 @dataclass
 class Settings:
     prompt: str = "watermark"
-    detector: str = "box"  # "box" or "segment" (rem-wm's outline)
+    detector: str = "box"  # "box", "segment" (rem-wm's outline) or "none" (drawn regions only)
     model: str = "large"
     expand: int = 6  # px the mask grows by
     strategy: str = "crop"
@@ -80,7 +112,7 @@ class Settings:
         data = data or {}
         s = cls(**{k: data[k] for k in cls.__dataclass_fields__ if k in data})
         s.prompt = (s.prompt or "").strip() or "watermark"
-        s.detector = s.detector if s.detector in ("segment", "box") else "box"
+        s.detector = s.detector if s.detector in ("segment", "box", "none") else "box"
         s.model = s.model if s.model in FLORENCE_MODELS else "large"
         s.expand = max(0, min(64, int(s.expand)))
         s.strategy = s.strategy if s.strategy in STRATEGIES else "crop"
@@ -195,11 +227,7 @@ class Engine:
                 for shape in shapes:
                     draw.polygon(shape.reshape(-1).tolist(), fill=255)
                 regions += 1
-        out = np.array(mask)
-        if settings.expand and regions:
-            k = settings.expand * 2 + 1
-            out = cv2.dilate(out, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k)))
-        return out, regions
+        return grow(np.array(mask), settings.expand), regions
 
     def inpaint(self, rgb: np.ndarray, mask: np.ndarray, strategy: str) -> np.ndarray:
         """rgb HxWx3 uint8 -> cleaned rgb."""
@@ -208,17 +236,25 @@ class Engine:
         return cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
 
     def remove(self, path: str | Path, settings: Settings,
-               on_stage: Callable[[str], None] = lambda _: None) -> Result:
+               on_stage: Callable[[str], None] = lambda _: None, shapes: list[dict] | None = None) -> Result:
+        """Clean one image: what detection finds plus any regions drawn by hand (shapes)."""
         started = time.perf_counter()
         source = load_image(path)
         alpha = source.getchannel("A") if source.mode in ("RGBA", "LA", "PA") else None
         rgb_image = source.convert("RGB")
+        drawn, drawn_count = regions_mask(rgb_image.size, shapes)
 
         with self._lock:
             if not self.loaded(settings.model):
                 self.load(settings.model, on_stage)
-            on_stage("Finding the watermark")
-            mask, regions = self.detect(rgb_image, settings)
+            if settings.detector == "none":
+                mask, regions = np.zeros_like(drawn), 0
+            else:
+                on_stage("Finding the watermark")
+                mask, regions = self.detect(rgb_image, settings)
+            if drawn_count:
+                mask = np.maximum(mask, grow(drawn, settings.expand))
+                regions += drawn_count
             if regions:
                 on_stage("Painting it out")
                 cleaned = Image.fromarray(self.inpaint(np.array(rgb_image), mask, settings.strategy))

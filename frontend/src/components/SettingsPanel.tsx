@@ -64,6 +64,15 @@ export function SettingsPanel({ settings, onChange, isDisabled }: Props) {
             </Radio.Content>
             <Description>Tighter, slower, can spill.</Description>
           </Radio>
+          <Radio value="none">
+            <Radio.Content>
+              <Radio.Control>
+                <Radio.Indicator />
+              </Radio.Control>
+              <Label>Manual</Label>
+            </Radio.Content>
+            <Description>Only the regions you draw.</Description>
+          </Radio>
         </RadioGroup>
 
         <Slider

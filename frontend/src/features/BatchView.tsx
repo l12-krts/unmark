@@ -1,13 +1,15 @@
 import { Button, Card, Chip, Label, ProgressBar, ScrollShadow, Spinner, Tooltip } from '@heroui/react'
-import { Eye, FolderOpen, FolderPlus, MagicWand, Picture, StopFill, Xmark } from '@gravity-ui/icons'
+import { Eye, FolderOpen, FolderPlus, MagicWand, Picture, SquareDashed, StopFill, Xmark } from '@gravity-ui/icons'
 import { AnimatePresence, motion } from 'motion/react'
 import { useState } from 'react'
 
 import { DropOverlay, DropZone } from '../components/DropZone'
 import { formatBytes, type PyApi, type Settings } from '../lib/bridge'
 import { EASE_IN_OUT, EASE_OUT, useAfterMount } from '../lib/motion'
+import { regionCount } from '../lib/regions'
 import type { BatchController, BatchItem } from '../state/useBatch'
 import { CompareModal } from './CompareModal'
+import { RegionsModal } from './RegionsModal'
 
 interface Props {
   api: PyApi
@@ -65,6 +67,7 @@ function formatEta(seconds: number): string {
 
 export function BatchView({ api, batch, onSettings, usingDefaultOutput, dragging, adding }: Props) {
   const [comparing, setComparing] = useState<BatchItem | null>(null)
+  const [drawing, setDrawing] = useState(false)
   const swapped = useAfterMount() // the list appeared after the tab opened: animate it in
   const { items, running, progress, counts } = batch
 
@@ -220,6 +223,27 @@ export function BatchView({ api, batch, onSettings, usingDefaultOutput, dragging
               </Button>
             )}
           </div>
+          <div className="flex items-center gap-3">
+            <SquareDashed className="shrink-0 text-muted" />
+            <div className="min-w-0 flex-1">
+              <p className="text-xs text-muted">Drawn regions</p>
+              <p className="truncate text-sm">
+                {batch.shapes.length
+                  ? `${regionCount(batch.shapes.length)} on every image`
+                  : batch.canStart
+                    ? 'None, detection only'
+                    : 'None yet: Detection is set to Manual, so draw at least one'}
+              </p>
+            </div>
+            {batch.shapes.length > 0 && (
+              <Button size="sm" variant="ghost" onPress={() => batch.setShapes([])} isDisabled={running}>
+                Clear
+              </Button>
+            )}
+            <Button size="sm" variant="secondary" onPress={() => setDrawing(true)} isDisabled={running}>
+              {batch.shapes.length ? 'Edit…' : 'Draw…'}
+            </Button>
+          </div>
           <div className="flex items-center gap-4">
             <ProgressBar
               aria-label="Batch progress"
@@ -246,7 +270,7 @@ export function BatchView({ api, batch, onSettings, usingDefaultOutput, dragging
                 {batch.cancelling ? 'Stopping…' : 'Stop'}
               </Button>
             ) : (
-              <Button onPress={() => void batch.start()}>
+              <Button onPress={() => void batch.start()} isDisabled={!batch.canStart}>
                 <MagicWand />
                 {startLabel}
               </Button>
@@ -257,6 +281,14 @@ export function BatchView({ api, batch, onSettings, usingDefaultOutput, dragging
 
       <DropOverlay visible={dragging} label="Drop to add to the batch" />
       <CompareModal api={api} item={comparing} onClose={() => setComparing(null)} />
+      <RegionsModal
+        api={api}
+        items={items}
+        shapes={batch.shapes}
+        onChange={batch.setShapes}
+        isOpen={drawing}
+        onClose={() => setDrawing(false)}
+      />
     </div>
   )
 }

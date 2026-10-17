@@ -2,6 +2,7 @@ import { toast } from '@heroui/react'
 import { useRef, useState } from 'react'
 
 import { errorText, fileName, type ImageItem, type PyApi, type Settings, type SingleResult } from '../lib/bridge'
+import type { Shape } from '../lib/regions'
 
 export type SingleStatus = 'empty' | 'ready' | 'working' | 'done'
 
@@ -12,9 +13,11 @@ interface State {
   stage: string
   result: SingleResult | null
   error: string | null
+  /** Regions drawn on this image. */
+  shapes: Shape[]
 }
 
-const EMPTY: State = { item: null, preview: null, status: 'empty', stage: '', result: null, error: null }
+const EMPTY: State = { item: null, preview: null, status: 'empty', stage: '', result: null, error: null, shapes: [] }
 
 export function useSingle(api: PyApi | null | undefined, settings: Settings) {
   const [state, setState] = useState<State>(EMPTY)
@@ -44,7 +47,7 @@ export function useSingle(api: PyApi | null | undefined, settings: Settings) {
     if (!api || !item || state.status === 'working') return
     setState((s) => ({ ...s, status: 'working', stage: 'Starting', error: null, result: null }))
     try {
-      const result = await api.remove_single(item.path, settings)
+      const result = await api.remove_single(item.path, settings, state.shapes)
       if (current.current === item.id) setState((s) => ({ ...s, status: 'done', result }))
     } catch (err) {
       if (current.current === item.id) setState((s) => ({ ...s, status: 'ready', error: errorText(err) }))
@@ -72,7 +75,12 @@ export function useSingle(api: PyApi | null | undefined, settings: Settings) {
 
   const onStage = (stage: string) => setState((s) => (s.status === 'working' ? { ...s, stage } : s))
 
-  return { ...state, open, pick, run, save, clear, onStage }
+  const setShapes = (shapes: Shape[]) => setState((s) => ({ ...s, shapes }))
+
+  /** Back from a result to the image, regions kept, to change them and run again. */
+  const editRegions = () => setState((s) => ({ ...s, status: 'ready', result: null, error: null }))
+
+  return { ...state, open, pick, run, save, clear, onStage, setShapes, editRegions }
 }
 
 export type SingleController = ReturnType<typeof useSingle>
