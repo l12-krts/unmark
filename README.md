@@ -1,10 +1,8 @@
 # Unmark
 
-Remove watermarks from one image or a whole folder. A desktop app: Python + [pywebview](https://pywebview.flowrl.com/) with a
-React + [HeroUI v3](https://heroui.com) UI (HeroUI's default theme, following the system light/dark setting).
+Remove watermarks from one image or a whole folder.
 
 The removal pipeline is [rem-wm](https://github.com/Damarcreative/rem-wm) (vendored in `vendor/rem-wm`):
-**Florence-2** finds the watermark, **LaMa** paints over it.
 
 ## Setup
 
@@ -14,7 +12,7 @@ Needs Python 3.12, Node 20+, and an NVIDIA GPU for reasonable speed (it falls ba
 powershell -ExecutionPolicy Bypass -File setup.ps1
 ```
 
-That creates `.venv` with CUDA torch, installs the Python packages, and builds the UI. The first launch downloads the
+That creates `.venv` with CUDA torch, installs the packages, and builds the UI. The first launch downloads the
 models (~1.7 GB: Florence-2-large from Hugging Face, big-lama from GitHub) into the usual Hugging Face / torch caches.
 
 ## Run
@@ -46,20 +44,6 @@ run.bat
 
 Settings persist in `%APPDATA%\Unmark\settings.json`.
 
-## How it differs from calling rem-wm directly
-
-- `remwm.py` runs `pip install flash-attn` on import, so the app doesn't import it. `app/engine.py` reuses rem-wm's
-  `lama_cleaner` package and reproduces its Florence → mask → LaMa pipeline.
-- Florence-2 always answers "watermark" with *something*, even on a clean photo. On clean images that answer is a box
-  over most of the frame or one hugging two of its borders, so those are discarded (`plausible()` in the engine).
-  Images where nothing survives are reported as "Nothing found" and copied unchanged. On the Windows wallpapers
-  (`scripts/evaluate.py`) Boxes still flags 4 of 37 clean images and fully covers 67 of 72 synthetic watermarks;
-  Outline flags 14/37 and covers 32/72, which is why Boxes is the default. Glance at the compare view before trusting a
-  batch blindly.
-- TorchScript's profiling executor is turned off: otherwise LaMa re-optimises for every new image size (seconds each).
-- Florence-2 revisions are pinned (it runs code from its model repo).
-- Transparency and EXIF orientation are kept; output format follows the input.
-
 ## Development
 
 ```bat
@@ -77,10 +61,6 @@ starts Vite on :5173 and points the window at it (hot reload, DevTools open).
 | `assets/icon.svg`, `icon-small.svg` | The app icon (the small one is drawn for 16–32 px) |
 | `scripts/smoke_test.py` | Run the engine on images without the UI |
 | `scripts/evaluate.py` | False-positive rate and mask coverage on clean vs synthetic-watermarked images |
-
-Motion: entrances use HeroUI's own curves (`--ease-out-quint`, `--ease-in-out-quart`), only transform, opacity,
-filter and clip-path animate, views animate when their content changes but not when a tab is switched, and
-`prefers-reduced-motion` keeps the fades and drops the movement. The batch list uses Motion for exits and reflow.
 
 ## Build the installer
 
