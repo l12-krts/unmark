@@ -1,5 +1,7 @@
 # Unmark
 
+[Unmark](assets/icons/icon-256.png)
+
 Remove watermarks from one image or a whole folder.
 
 The removal pipeline is [rem-wm](https://github.com/Damarcreative/rem-wm) (vendored in `vendor/rem-wm`):
