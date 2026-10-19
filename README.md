@@ -1,6 +1,6 @@
 # Unmark
 
-[assets/icons/icon-256.png](https://github.com/l12-krts/unmark/blob/c22ebe5b6ad143b700f2b2eed97fe4cb8e21cfcb/assets/icons/icon-256.png?raw=true)
+![assets/icons/icon-256.png](https://github.com/l12-krts/unmark/blob/c22ebe5b6ad143b700f2b2eed97fe4cb8e21cfcb/assets/icons/icon-256.png?raw=true)
 
 Remove watermarks from one image or a whole folder.
 
